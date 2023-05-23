@@ -18,16 +18,28 @@ const (
 type Pagination struct {
 	Page   int               `query:"page" minimum:"1" default:"1"`
 	Size   int               `query:"size" minimum:"1" default:"10"`
+	Sort   string            `query:"sort" default:"id" description:"1. asc: **id**\n2. desc: **-id**\n3. multi: **id,created_at**"`
 	Search string            `query:"search"`
 	Filter map[string]string `query:"filter" description:"1. Comparison Operators: **eq**, **ne**, **like**, **gt**, **gte**, **lt**, **lte**, **in**\n2. Conjunction Operators: **AND**, **OR**\n3. Usage: [**op:**]value"`
 }
 
-func Paginate(model any, p Pagination) func(db *gorm.DB) *gorm.DB {
-	return func(db *gorm.DB) *gorm.DB {
+func Paginate[T any](db *gorm.DB, p Pagination, count *int64, out *[]T, query ...func(db *gorm.DB) *gorm.DB) error {
+	model := new(T)
+	scopes := append(query, func(db *gorm.DB) *gorm.DB {
 		setSearch(db, model, p.Search)
 		setFilter(db, model, p.Filter)
-		return db.Offset((p.Page - 1) * p.Size).Limit(p.Size)
+		return db
+	})
+	tx := db.Model(model).Scopes(scopes...).Session(&gorm.Session{})
+	if result := tx.Count(count); result.Error != nil {
+		return result.Error
 	}
+	if result := tx.
+		Offset((p.Page - 1) * p.Size).Limit(p.Size).Order(p.Sort).
+		Find(out); result.Error != nil {
+		return result.Error
+	}
+	return nil
 }
 
 func setSearch(db *gorm.DB, model any, search string) *gorm.DB {

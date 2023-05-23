@@ -28,12 +28,13 @@ func main() {
 	p := paginate.Pagination{
 		Page: 3,
 		Size: 10,
+		Sort: "-id",
 	}
 	seedIfNeeded(db)
 	var posts []Post
 	var count int64
-	if result := db.Model(&Post{}).Scopes(paginate.Paginate(&Post{}, p)).Count(&count).Find(&posts); result.Error != nil {
-		panic(result.Error)
+	if err := paginate.Paginate(db, p, &count, &posts); err != nil {
+		panic(err)
 	}
 	log.Println(count, posts)
 }
