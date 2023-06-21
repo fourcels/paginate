@@ -2,17 +2,10 @@ package paginate
 
 import (
 	"reflect"
-	"regexp"
 	"strings"
 
+	"golang.org/x/exp/slices"
 	"gorm.io/gorm"
-)
-
-type WhereType string
-
-const (
-	AND = WhereType("AND")
-	OR  = WhereType("OR")
 )
 
 type Pagination struct {
@@ -20,7 +13,7 @@ type Pagination struct {
 	Size   int               `query:"size" minimum:"1" default:"10"`
 	Sort   string            `query:"sort" default:"id" description:"1. asc: **id**\n2. desc: **-id**\n3. multi: **id,created_at**"`
 	Search string            `query:"search"`
-	Filter map[string]string `query:"filter" description:"1. Comparison Operators: **eq**, **ne**, **like**, **gt**, **gte**, **lt**, **lte**, **in**\n2. Conjunction Operators: **AND**, **OR**\n3. Usage: [**op:**]value"`
+	Filter map[string]string `query:"filter" description:"1. Comparison Operators: **eq**, **ne**, **like**, **contain**, **gt**, **gte**, **lt**, **lte**, **in**\n2. Usage: \"field**[:op]**\":value"`
 }
 
 func Paginate[T any](db *gorm.DB, p Pagination, count *int64, out *[]T, query ...func(db *gorm.DB) *gorm.DB) error {
@@ -56,77 +49,39 @@ func setSearch(db *gorm.DB, model any, search string) *gorm.DB {
 
 func setFilter(db *gorm.DB, model any, data map[string]string) *gorm.DB {
 	fields := getFields(model, "filter")
-	for _, field := range fields {
-		value, exists := data[field]
-		if exists {
-			if value = strings.TrimSpace(value); len(value) > 0 {
-				db = addFilter(db, field, value)
-			}
+
+	for k, v := range data {
+		field, op := k, "eq"
+		if arr := strings.SplitN(k, ":", 2); len(arr) > 1 {
+			field, op = arr[0], arr[1]
+		}
+		if slices.Contains(fields, field) {
+			db = where(db, field, strings.TrimSpace(v), op)
 		}
 	}
 	return db
 }
 
-func addFilter(db *gorm.DB, field, value string) *gorm.DB {
-	pattern := regexp.MustCompile(`(?i)\s+(and|or)\s+`)
-	db2 := db.Session(&gorm.Session{})
-	values := pattern.Split(value, -1)
-	logicals := pattern.FindAllStringSubmatch(value, -1)
-	for i, v := range values {
-		v = strings.TrimSpace(v)
-		if i == 0 {
-			db2 = andWhere(db2, field, v)
-			continue
-		}
-		switch strings.ToUpper(logicals[i-1][1]) {
-		case "AND":
-			db2 = andWhere(db2, field, v)
-		case "OR":
-			db2 = orWhere(db2, field, v)
-		}
-
-	}
-	return db.Where(db2)
-}
-
-func orWhere(db *gorm.DB, field, value string) *gorm.DB {
-	return where(db, field, value, OR)
-}
-
-func andWhere(db *gorm.DB, field, value string) *gorm.DB {
-	return where(db, field, value, AND)
-}
-
-func where(db *gorm.DB, field, value string, t WhereType) *gorm.DB {
-
-	op := "eq"
-	if arr := strings.SplitN(value, ":", 2); len(arr) > 1 {
-		op = arr[0]
-		value = arr[1]
-	}
-	query := field + " = ?"
-	var args any = value
+func where(db *gorm.DB, field, value, op string) *gorm.DB {
 	switch op {
+	case "eq":
+		return db.Where(field+" = ?", value)
 	case "ne":
-		query = field + " != ?"
-	case "like":
-		query = field + " LIKE ?"
+		return db.Where(field+" != ?", value)
+	case "contain", "like":
+		return db.Where(field+" LIKE ?", "%"+value+"%")
 	case "gt":
-		query = field + " > ?"
+		return db.Where(field+" > ?", value)
 	case "gte":
-		query = field + " >= ?"
+		return db.Where(field+" >= ?", value)
 	case "lt":
-		query = field + " < ?"
+		return db.Where(field+" < ?", value)
 	case "lte":
-		query = field + " <= ?"
+		return db.Where(field+" <= ?", value)
 	case "in":
-		query = field + " IN ?"
-		args = strings.Split(value, ",")
+		return db.Where(field+" IN ?", strings.Split(value, ","))
 	}
-	if t == OR {
-		return db.Or(query, args)
-	}
-	return db.Where(query, args)
+	return db
 }
 
 func getFields(model any, tag string) []string {
