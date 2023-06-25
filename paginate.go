@@ -16,7 +16,7 @@ type Pagination struct {
 	Filter map[string]string `query:"filter" description:"1. Comparison Operators: **eq**, **ne**, **like**, **contain**, **gt**, **gte**, **lt**, **lte**, **in**\n2. Usage: \"field**[:op]**\":value"`
 }
 
-func Paginate[T any](db *gorm.DB, p Pagination, count *int64, out *[]T, query ...func(db *gorm.DB) *gorm.DB) error {
+func Paginate[T any](db *gorm.DB, p Pagination, out *[]T, query ...func(db *gorm.DB) *gorm.DB) (int64, error) {
 	model := new(T)
 	scopes := append(query, func(db *gorm.DB) *gorm.DB {
 		setSearch(db, model, p.Search)
@@ -24,15 +24,16 @@ func Paginate[T any](db *gorm.DB, p Pagination, count *int64, out *[]T, query ..
 		return db
 	})
 	tx := db.Model(model).Scopes(scopes...).Session(&gorm.Session{})
-	if result := tx.Count(count); result.Error != nil {
-		return result.Error
+	var count int64
+	if result := tx.Count(&count); result.Error != nil {
+		return count, result.Error
 	}
 	if result := tx.
 		Offset((p.Page - 1) * p.Size).Limit(p.Size).Order(p.Sort).
 		Find(out); result.Error != nil {
-		return result.Error
+		return count, result.Error
 	}
-	return nil
+	return count, nil
 }
 
 func setSearch(db *gorm.DB, model any, search string) *gorm.DB {
