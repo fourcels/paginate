@@ -8,7 +8,6 @@ import (
 	"github.com/fourcels/paginate"
 	"github.com/fourcels/rest"
 	"github.com/labstack/echo/v4"
-	"github.com/swaggest/swgui"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
@@ -42,7 +41,7 @@ func main() {
 	post.GET("", GetPosts())
 
 	// Swagger UI endpoint at /docs.
-	s.Docs("/docs", swgui.Config{})
+	s.Docs("/docs")
 
 	// Start server.
 	log.Println("http://localhost:1323/docs")
