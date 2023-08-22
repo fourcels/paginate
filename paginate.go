@@ -56,7 +56,7 @@ func setFilter(db *gorm.DB, model any, data map[string]string) *gorm.DB {
 		if arr := strings.SplitN(k, ":", 2); len(arr) > 1 {
 			field, op = arr[0], arr[1]
 		}
-		if slices.Contains(fields, field) {
+		if slices.Contains(fields, field) && len(v) > 0 {
 			db = where(db, field, strings.TrimSpace(v), op)
 		}
 	}
