@@ -29,11 +29,26 @@ func Paginate[T any](db *gorm.DB, p Pagination, out *[]T, query ...func(db *gorm
 		return count, result.Error
 	}
 	if result := tx.
-		Offset((p.Page - 1) * p.Size).Limit(p.Size).Order(p.Sort).
+		Offset((p.Page - 1) * p.Size).Limit(p.Size).Order(parseSort(p.Sort)).
 		Find(out); result.Error != nil {
 		return count, result.Error
 	}
 	return count, nil
+}
+
+func parseSort(sort string) string {
+	sort = strings.TrimSpace(sort)
+	if len(sort) == 0 {
+		return sort
+	}
+	sortArr := strings.Split(sort, ",")
+	for i := 0; i < len(sortArr); i++ {
+		item := sortArr[i]
+		if strings.HasPrefix(sort, "-") {
+			sortArr[i] = strings.TrimPrefix(item, "-") + " desc"
+		}
+	}
+	return strings.Join(sortArr, ",")
 }
 
 func setSearch(db *gorm.DB, model any, search string) *gorm.DB {
