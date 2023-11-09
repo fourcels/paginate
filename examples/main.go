@@ -19,6 +19,15 @@ type Post struct {
 	CreatedAt time.Time `json:"created_at,omitempty" filter:"created_at"`
 }
 
+type PostLabel struct {
+	Post
+	Label string
+}
+
+func (*PostLabel) TableName() string {
+	return "posts"
+}
+
 var DB *gorm.DB
 
 func initDB() {
@@ -68,7 +77,7 @@ func CreatePost() rest.Interactor {
 }
 
 func GetPosts() rest.Interactor {
-	return rest.NewHandler(func(c echo.Context, in paginate.Pagination, out *[]Post) error {
+	return rest.NewHandler(func(c echo.Context, in paginate.Pagination, out *[]PostLabel) error {
 		err := setupPaginate(c, in, out)
 		if err != nil {
 			return err

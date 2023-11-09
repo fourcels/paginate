@@ -105,12 +105,24 @@ func getFields(model any, tag string) []string {
 	if model == nil {
 		return fields
 	}
-	typ := reflect.TypeOf(model).Elem()
+	typ := reflect.TypeOf(model)
+	val := reflect.ValueOf(model)
+	val = reflect.Indirect(val)
+
+	if typ.Kind() == reflect.Ptr {
+		typ = typ.Elem()
+	}
+
 	if typ.Kind() != reflect.Struct {
 		return fields
 	}
 	for i := 0; i < typ.NumField(); i++ {
 		typeField := typ.Field(i)
+		if typeField.Anonymous {
+			structField := val.Field(i)
+			fieldVal := structField.Interface()
+			fields = append(fields, getFields(fieldVal, tag)...)
+		}
 		fieldName := typeField.Tag.Get(tag)
 		if len(fieldName) > 0 {
 			fields = append(fields, fieldName)
