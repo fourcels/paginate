@@ -4,8 +4,8 @@ import (
 	"reflect"
 	"strings"
 
-	"golang.org/x/exp/slices"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type Pagination struct {
@@ -28,27 +28,36 @@ func Paginate[T any](db *gorm.DB, p Pagination, out *[]T, query ...func(db *gorm
 	if result := tx.Count(&count); result.Error != nil {
 		return count, result.Error
 	}
-	if result := tx.
-		Offset((p.Page - 1) * p.Size).Limit(p.Size).Order(parseSort(p.Sort)).
+	if result := tx.Scopes(OrderByScope(p.Sort)).
+		Offset((p.Page - 1) * p.Size).Limit(p.Size).
 		Find(out); result.Error != nil {
 		return count, result.Error
 	}
 	return count, nil
 }
 
-func parseSort(sort string) string {
-	sort = strings.TrimSpace(sort)
-	if len(sort) == 0 {
-		return sort
-	}
-	sortArr := strings.Split(sort, ",")
-	for i := 0; i < len(sortArr); i++ {
-		item := sortArr[i]
-		if strings.HasPrefix(sort, "-") {
-			sortArr[i] = strings.TrimPrefix(item, "-") + " desc"
+func OrderByScope(sort string) func(db *gorm.DB) *gorm.DB {
+	return func(db *gorm.DB) *gorm.DB {
+		sort = strings.TrimSpace(sort)
+		if len(sort) == 0 {
+			return db
 		}
+		sorts := strings.Split(sort, ",")
+		for _, v := range sorts {
+			table, field, desc := clause.CurrentTable, strings.TrimSpace(v), false
+			if strings.Contains(v, ".") {
+				table = ""
+			}
+			if strings.HasPrefix(v, "-") {
+				field, desc = strings.TrimPrefix(v, "-"), true
+			}
+			db.Order(clause.OrderByColumn{
+				Column: clause.Column{Table: table, Name: field},
+				Desc:   desc,
+			})
+		}
+		return db
 	}
-	return strings.Join(sortArr, ",")
 }
 
 func setSearch(db *gorm.DB, model any, search string) *gorm.DB {
@@ -56,7 +65,11 @@ func setSearch(db *gorm.DB, model any, search string) *gorm.DB {
 		fields := getFields(model, "search")
 		db2 := db.Session(&gorm.Session{})
 		for _, field := range fields {
-			db2 = db2.Or(field+" LIKE ?", "%"+search+"%")
+			column := clause.Column{
+				Table: clause.CurrentTable,
+				Name:  field,
+			}
+			db2 = db2.Or(clause.Like{Value: "%" + search + "%", Column: column})
 		}
 		return db.Where(db2)
 	}
@@ -71,33 +84,59 @@ func setFilter(db *gorm.DB, model any, data map[string]string) *gorm.DB {
 		if arr := strings.SplitN(k, ":", 2); len(arr) > 1 {
 			field, op = arr[0], arr[1]
 		}
-		if slices.Contains(fields, field) && len(v) > 0 {
+		if checkField(fields, field) && len(v) > 0 {
 			db = where(db, field, strings.TrimSpace(v), op)
 		}
 	}
 	return db
 }
 
+func checkField(fields []string, field string) bool {
+	field = strings.Split(field, ".")[0]
+	for _, v := range fields {
+		if v == field {
+			return true
+		}
+	}
+	return false
+}
+
 func where(db *gorm.DB, field, value, op string) *gorm.DB {
+	tableName := clause.CurrentTable
+	if strings.Contains(field, ".") {
+		tableName = ""
+	}
+	column := clause.Column{
+		Table: tableName,
+		Name:  field,
+	}
 	switch op {
 	case "eq":
-		return db.Where(field+" = ?", value)
+		return db.Where(clause.Eq{Value: value, Column: column})
 	case "ne":
-		return db.Where(field+" != ?", value)
+		return db.Where(clause.Neq{Value: value, Column: column})
 	case "contain", "like":
-		return db.Where(field+" LIKE ?", "%"+value+"%")
+		return db.Where(clause.Like{Value: "%" + value + "%", Column: column})
 	case "gt":
-		return db.Where(field+" > ?", value)
+		return db.Where(clause.Gt{Value: value, Column: column})
 	case "gte":
-		return db.Where(field+" >= ?", value)
+		return db.Where(clause.Gte{Value: value, Column: column})
 	case "lt":
-		return db.Where(field+" < ?", value)
+		return db.Where(clause.Lt{Value: value, Column: column})
 	case "lte":
-		return db.Where(field+" <= ?", value)
+		return db.Where(clause.Lte{Value: value, Column: column})
 	case "in":
-		return db.Where(field+" IN ?", strings.Split(value, ","))
+		return db.Where(clause.IN{Values: toAnyList(strings.Split(value, ",")), Column: column})
 	}
 	return db
+}
+
+func toAnyList[T any](input []T) []any {
+	list := make([]any, len(input))
+	for i, v := range input {
+		list[i] = v
+	}
+	return list
 }
 
 func getFields(model any, tag string) []string {
@@ -118,10 +157,14 @@ func getFields(model any, tag string) []string {
 	}
 	for i := 0; i < typ.NumField(); i++ {
 		typeField := typ.Field(i)
+		if !typeField.IsExported() {
+			continue
+		}
 		if typeField.Anonymous {
 			structField := val.Field(i)
 			fieldVal := structField.Interface()
 			fields = append(fields, getFields(fieldVal, tag)...)
+			continue
 		}
 		fieldName := typeField.Tag.Get(tag)
 		if len(fieldName) > 0 {
