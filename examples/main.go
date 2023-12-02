@@ -22,13 +22,6 @@ type Post struct {
 	Title     string    `json:"title,omitempty" search:"title" filter:"title"`
 	Content   string    `json:"content,omitempty" search:"content"`
 	CreatedAt time.Time `json:"created_at,omitempty" filter:"created_at"`
-	UserID    uint      `json:"user_id,omitempty"`
-	User      *User     `json:"user,omitempty" filter:"user"`
-}
-
-type PostLabel struct {
-	Post  `json:"post,omitempty"`
-	Label string `json:"label,omitempty"`
 }
 
 var DB *gorm.DB
@@ -40,7 +33,7 @@ func initDB() {
 	}
 
 	// Migrate the schema
-	db.AutoMigrate(&Post{})
+	db.AutoMigrate(&User{}, &Post{})
 	DB = db
 }
 
@@ -83,14 +76,12 @@ func CreatePost() rest.Interactor {
 	type input struct {
 		Title   string `json:"title,omitempty"`
 		Content string `json:"content,omitempty"`
-		UserID  uint   `json:"user_id,omitempty"`
 	}
 
 	return rest.NewHandler(func(c echo.Context, in input, out *Post) error {
 		post := Post{
 			Title:   in.Title,
 			Content: in.Content,
-			UserID:  in.UserID,
 		}
 		if result := DB.Create(&post); result.Error != nil {
 			return result.Error
@@ -101,10 +92,13 @@ func CreatePost() rest.Interactor {
 }
 
 func GetPosts() rest.Interactor {
-	return rest.NewHandler(func(c echo.Context, in paginate.Pagination, out *[]Post) error {
-		err := setupPaginate(c, in, out, func(db *gorm.DB) *gorm.DB {
-			return db.Joins("User")
-		})
+	type input struct {
+		Title string `query:"title"`
+		paginate.PaginationDefault
+	}
+
+	return rest.NewHandler(func(c echo.Context, in input, out *[]Post) error {
+		err := setupPaginate(c, in.SetDefaultSort("id"), out)
 		if err != nil {
 			return err
 		}
