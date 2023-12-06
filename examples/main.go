@@ -19,7 +19,7 @@ type User struct {
 
 type Post struct {
 	ID        uint      `json:"id,omitempty" filter:"id"`
-	Title     string    `json:"title,omitempty" search:"title" filter:"title"`
+	Title2    string    `json:"title2,omitempty" gorm:"column:title" search:"title" filter:"title2"`
 	Content   string    `json:"content,omitempty" search:"content"`
 	CreatedAt time.Time `json:"created_at,omitempty" filter:"created_at"`
 	UserID    uint      `json:"user_id,omitempty"`
@@ -88,7 +88,7 @@ func CreatePost() rest.Interactor {
 
 	return rest.NewHandler(func(c echo.Context, in input, out *Post) error {
 		post := Post{
-			Title:   in.Title,
+			Title2:  in.Title,
 			Content: in.Content,
 			UserID:  in.UserID,
 		}

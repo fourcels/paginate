@@ -6,6 +6,7 @@ import (
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
+	"gorm.io/gorm/schema"
 )
 
 type Pagination struct {
@@ -168,6 +169,11 @@ func getFields(model any, tag string) []string {
 		}
 		fieldName := typeField.Tag.Get(tag)
 		if len(fieldName) > 0 {
+			tagSetting := schema.ParseTagSetting(typeField.Tag.Get("gorm"), ";")
+			column, ok := tagSetting["COLUMN"]
+			if ok {
+				fieldName = column
+			}
 			fields = append(fields, fieldName)
 		}
 	}
