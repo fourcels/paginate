@@ -9,19 +9,50 @@ import (
 	"gorm.io/gorm/schema"
 )
 
-type Pagination struct {
+type Pagination interface {
+	GetPage() int
+	GetSize() int
+	GetSort() string
+	GetSearch() string
+	GetFilter() map[string]string
+}
+
+type PaginationDefault struct {
 	Page   int               `query:"page" minimum:"1" default:"1"`
 	Size   int               `query:"size" minimum:"1" default:"10"`
-	Sort   string            `query:"sort" default:"id" description:"1. asc: **id**\n2. desc: **-id**\n3. multi: **id,created_at**"`
+	Sort   string            `query:"sort" description:"1. asc: **id**\n2. desc: **-id**\n3. multi: **id,created_at**"`
 	Search string            `query:"search"`
 	Filter map[string]string `query:"filter" description:"1. Comparison Operators: **eq**, **ne**, **like**, **contain**, **gt**, **gte**, **lt**, **lte**, **in**\n2. Usage: \"field**[:op]**\":value"`
+}
+
+func (p *PaginationDefault) SetDefaultSort(sort string) Pagination {
+	if len(p.Sort) == 0 {
+		p.Sort = sort
+	}
+	return p
+}
+
+func (p *PaginationDefault) GetPage() int {
+	return p.Page
+}
+func (p *PaginationDefault) GetSize() int {
+	return p.Size
+}
+func (p *PaginationDefault) GetSort() string {
+	return p.Sort
+}
+func (p *PaginationDefault) GetSearch() string {
+	return p.Search
+}
+func (p *PaginationDefault) GetFilter() map[string]string {
+	return p.Filter
 }
 
 func Paginate[T any](db *gorm.DB, p Pagination, out *[]T, query ...func(db *gorm.DB) *gorm.DB) (int64, error) {
 	model := new(T)
 	scopes := append(query, func(db *gorm.DB) *gorm.DB {
-		setSearch(db, model, p.Search)
-		setFilter(db, model, p.Filter)
+		setSearch(db, model, p.GetSearch())
+		setFilter(db, model, p.GetFilter())
 		return db
 	})
 	tx := db.Model(model).Scopes(scopes...).Session(&gorm.Session{})
@@ -29,8 +60,8 @@ func Paginate[T any](db *gorm.DB, p Pagination, out *[]T, query ...func(db *gorm
 	if result := tx.Count(&count); result.Error != nil {
 		return count, result.Error
 	}
-	if result := tx.Scopes(OrderByScope(p.Sort)).
-		Offset((p.Page - 1) * p.Size).Limit(p.Size).
+	if result := tx.Scopes(OrderByScope(p.GetSort())).
+		Offset((p.GetPage() - 1) * p.GetSize()).Limit(p.GetSize()).
 		Find(out); result.Error != nil {
 		return count, result.Error
 	}
