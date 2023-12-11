@@ -1,6 +1,7 @@
 package paginate
 
 import (
+	"maps"
 	"reflect"
 	"strings"
 
@@ -60,7 +61,7 @@ func Paginate[T any](db *gorm.DB, p Pagination, out *[]T, query ...func(db *gorm
 	if result := tx.Count(&count); result.Error != nil {
 		return count, result.Error
 	}
-	if result := tx.Scopes(OrderByScope(p.GetSort())).
+	if result := tx.Scopes(OrderByScope(model, p.GetSort())).
 		Offset((p.GetPage() - 1) * p.GetSize()).Limit(p.GetSize()).
 		Find(out); result.Error != nil {
 		return count, result.Error
@@ -68,39 +69,56 @@ func Paginate[T any](db *gorm.DB, p Pagination, out *[]T, query ...func(db *gorm
 	return count, nil
 }
 
-func OrderByScope(sort string) func(db *gorm.DB) *gorm.DB {
+func OrderByScope(model any, sort string) func(db *gorm.DB) *gorm.DB {
 	return func(db *gorm.DB) *gorm.DB {
-		sort = strings.TrimSpace(sort)
-		if len(sort) == 0 {
-			return db
-		}
-		sorts := strings.Split(sort, ",")
-		for _, v := range sorts {
-			table, field, desc := clause.CurrentTable, strings.TrimSpace(v), false
-			if strings.Contains(v, ".") {
-				table = ""
-			}
-			if strings.HasPrefix(v, "-") {
-				field, desc = strings.TrimPrefix(v, "-"), true
-			}
-			db.Order(clause.OrderByColumn{
-				Column: clause.Column{Table: table, Name: field},
-				Desc:   desc,
-			})
+		orderByColumns := sort2OrderByColumns(model, sort)
+		for _, v := range orderByColumns {
+			db = db.Order(v)
 		}
 		return db
 	}
 }
 
+func sort2OrderByColumns(model any, sort string) []clause.OrderByColumn {
+	orderByColumns := make([]clause.OrderByColumn, 0)
+	fields := getFields(model, "sort")
+
+	sort = strings.TrimSpace(sort)
+	for _, v := range strings.Split(sort, ",") {
+		field, desc := strings.TrimSpace(v), false
+		if strings.HasPrefix(field, "-") {
+			field, desc = strings.TrimPrefix(field, "-"), true
+		}
+		fieldName, ok := fields[field]
+		if !ok {
+			continue
+		}
+		orderByColumns = append(orderByColumns, getOrderByColumn(fieldName, desc))
+	}
+
+	return orderByColumns
+}
+func getOrderByColumn(fieldName string, desc bool) clause.OrderByColumn {
+	return clause.OrderByColumn{
+		Column: getColumn(fieldName),
+		Desc:   desc,
+	}
+}
+
+func getSearchColumns(model any) []clause.Column {
+	fields := getFields(model, "search")
+	columns := make([]clause.Column, 0)
+	for _, field := range fields {
+		columns = append(columns, getColumn(field))
+	}
+	return columns
+}
+
 func setSearch(db *gorm.DB, model any, search string) *gorm.DB {
 	if search = strings.TrimSpace(search); len(search) > 0 {
-		fields := getFields(model, "search")
 		db2 := db.Session(&gorm.Session{})
-		for _, field := range fields {
-			column := clause.Column{
-				Table: clause.CurrentTable,
-				Name:  field,
-			}
+		searchColumns := getSearchColumns(model)
+		for _, column := range searchColumns {
 			db2 = db2.Or(clause.Like{Value: "%" + search + "%", Column: column})
 		}
 		return db.Where(db2)
@@ -116,32 +134,15 @@ func setFilter(db *gorm.DB, model any, data map[string]string) *gorm.DB {
 		if arr := strings.SplitN(k, ":", 2); len(arr) > 1 {
 			field, op = arr[0], arr[1]
 		}
-		if checkField(fields, field) && len(v) > 0 {
-			db = where(db, field, strings.TrimSpace(v), op)
+		if fieldName, ok := fields[field]; ok && len(v) > 0 {
+			db = where(db, fieldName, strings.TrimSpace(v), op)
 		}
 	}
 	return db
 }
 
-func checkField(fields []string, field string) bool {
-	field = strings.Split(field, ".")[0]
-	for _, v := range fields {
-		if v == field {
-			return true
-		}
-	}
-	return false
-}
-
-func where(db *gorm.DB, field, value, op string) *gorm.DB {
-	tableName := clause.CurrentTable
-	if strings.Contains(field, ".") {
-		tableName = ""
-	}
-	column := clause.Column{
-		Table: tableName,
-		Name:  field,
-	}
+func where(db *gorm.DB, fieldName, value, op string) *gorm.DB {
+	column := getColumn(fieldName)
 	switch op {
 	case "eq":
 		return db.Where(clause.Eq{Value: value, Column: column})
@@ -171,14 +172,28 @@ func toAnyList[T any](input []T) []any {
 	return list
 }
 
-func getFields(model any, tag string) []string {
-	fields := make([]string, 0)
+func getColumn(fieldName string) clause.Column {
+	column := clause.Column{}
+	if len(fieldName) == 0 {
+		return column
+	}
+	fieldArr := strings.Split(fieldName, ".")
+	if len(fieldArr) == 1 {
+		column.Table = clause.CurrentTable
+		column.Name = fieldArr[0]
+	} else {
+		column.Table = strings.Join(fieldArr[:len(fieldArr)-1], "__")
+		column.Name = fieldArr[len(fieldArr)-1]
+	}
+	return column
+}
+
+func getFields(model any, tag string) map[string]string {
+	fields := make(map[string]string)
 	if model == nil {
 		return fields
 	}
 	typ := reflect.TypeOf(model)
-	val := reflect.ValueOf(model)
-	val = reflect.Indirect(val)
 
 	if typ.Kind() == reflect.Ptr {
 		typ = typ.Elem()
@@ -188,24 +203,38 @@ func getFields(model any, tag string) []string {
 		return fields
 	}
 	for i := 0; i < typ.NumField(); i++ {
-		typeField := typ.Field(i)
-		if !typeField.IsExported() {
+		field := typ.Field(i)
+		fieldType := field.Type
+		if fieldType.Kind() == reflect.Ptr {
+			fieldType = fieldType.Elem()
+		}
+		if !field.IsExported() {
 			continue
 		}
-		if typeField.Anonymous {
-			structField := val.Field(i)
-			fieldVal := structField.Interface()
-			fields = append(fields, getFields(fieldVal, tag)...)
+		if field.Anonymous {
+			maps.Copy(fields, getFields(reflect.New(fieldType).Interface(), tag))
 			continue
 		}
-		fieldName := typeField.Tag.Get(tag)
+		fieldName := field.Tag.Get(tag)
 		if len(fieldName) > 0 {
-			tagSetting := schema.ParseTagSetting(typeField.Tag.Get("gorm"), ";")
+			dbName := field.Name
+			tagSetting := schema.ParseTagSetting(field.Tag.Get("gorm"), ";")
 			column, ok := tagSetting["COLUMN"]
 			if ok {
-				fieldName = column
+				dbName = column
 			}
-			fields = append(fields, fieldName)
+			if fieldType.Kind() == reflect.Struct {
+				subFields := getFields(reflect.New(fieldType).Interface(), tag)
+				if len(subFields) > 0 {
+					for k, v := range subFields {
+						fields[fieldName+"."+k] = dbName + "." + v
+					}
+				} else {
+					fields[fieldName] = dbName
+				}
+			} else {
+				fields[fieldName] = dbName
+			}
 		}
 	}
 	return fields
