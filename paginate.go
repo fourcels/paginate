@@ -18,7 +18,7 @@ type Pagination interface {
 	GetFilter() map[string]string
 }
 
-type PaginationDefault struct {
+type DefaultPagination struct {
 	Page   int               `query:"page" minimum:"1" default:"1"`
 	Size   int               `query:"size" minimum:"1" default:"10"`
 	Sort   string            `query:"sort" description:"1. asc: **id**\n2. desc: **-id**\n3. multi: **id,created_at**"`
@@ -26,26 +26,26 @@ type PaginationDefault struct {
 	Filter map[string]string `query:"filter" description:"1. Comparison Operators: **eq**, **ne**, **like**, **contain**, **gt**, **gte**, **lt**, **lte**, **in**\n2. Usage: \"field**[:op]**\":value"`
 }
 
-func (p *PaginationDefault) SetDefaultSort(sort string) Pagination {
+func (p *DefaultPagination) SetDefaultSort(sort string) Pagination {
 	if len(p.Sort) == 0 {
 		p.Sort = sort
 	}
 	return p
 }
 
-func (p *PaginationDefault) GetPage() int {
+func (p *DefaultPagination) GetPage() int {
 	return p.Page
 }
-func (p *PaginationDefault) GetSize() int {
+func (p *DefaultPagination) GetSize() int {
 	return p.Size
 }
-func (p *PaginationDefault) GetSort() string {
+func (p *DefaultPagination) GetSort() string {
 	return p.Sort
 }
-func (p *PaginationDefault) GetSearch() string {
+func (p *DefaultPagination) GetSearch() string {
 	return p.Search
 }
-func (p *PaginationDefault) GetFilter() map[string]string {
+func (p *DefaultPagination) GetFilter() map[string]string {
 	return p.Filter
 }
 

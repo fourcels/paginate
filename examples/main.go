@@ -96,7 +96,7 @@ func CreatePost() rest.Interactor {
 	})
 }
 func GetUsers() rest.Interactor {
-	return rest.NewHandler(func(c echo.Context, in paginate.PaginationDefault, out *[]User) error {
+	return rest.NewHandler(func(c echo.Context, in paginate.DefaultPagination, out *[]User) error {
 		err := setupPaginate(c, in.SetDefaultSort("id"), out)
 		if err != nil {
 			return err
@@ -108,7 +108,7 @@ func GetUsers() rest.Interactor {
 func GetPosts() rest.Interactor {
 	type input struct {
 		Title string `query:"title"`
-		paginate.PaginationDefault
+		paginate.DefaultPagination
 	}
 
 	return rest.NewHandler(func(c echo.Context, in input, out *[]Post) error {
