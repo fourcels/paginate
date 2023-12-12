@@ -19,9 +19,11 @@ type User struct {
 
 type Post struct {
 	ID        uint      `json:"id,omitempty" filter:"id"`
-	Title2    string    `json:"title2,omitempty" gorm:"column:title" search:"title" filter:"title2"`
+	Title     string    `json:"title,omitempty" gorm:"column:title2" search:"title" filter:"title"`
 	Content   string    `json:"content,omitempty" search:"content"`
 	CreatedAt time.Time `json:"created_at,omitempty" filter:"created_at"`
+	UserID    uint      `json:"user_id,omitempty"`
+	User      *User     `json:"user,omitempty" filter:"user"`
 }
 
 var DB *gorm.DB
@@ -34,7 +36,7 @@ func initDB() {
 
 	// Migrate the schema
 	db.AutoMigrate(&User{}, &Post{})
-	DB = db
+	DB = db.Debug()
 }
 
 func main() {
@@ -46,6 +48,7 @@ func main() {
 	post.GET("", GetPosts())
 
 	user := s.Group("/users", rest.WithTags("Users"))
+	user.GET("", GetUsers())
 	user.POST("", CreateUser())
 
 	// Swagger UI endpoint at /docs.
@@ -76,17 +79,28 @@ func CreatePost() rest.Interactor {
 	type input struct {
 		Title   string `json:"title,omitempty"`
 		Content string `json:"content,omitempty"`
+		UserID  uint   `json:"user_id,omitempty"`
 	}
 
 	return rest.NewHandler(func(c echo.Context, in input, out *Post) error {
 		post := Post{
-			Title2:  in.Title,
+			Title:   in.Title,
 			Content: in.Content,
+			UserID:  in.UserID,
 		}
 		if result := DB.Create(&post); result.Error != nil {
 			return result.Error
 		}
 		*out = post
+		return nil
+	})
+}
+func GetUsers() rest.Interactor {
+	return rest.NewHandler(func(c echo.Context, in paginate.PaginationDefault, out *[]User) error {
+		err := setupPaginate(c, in.SetDefaultSort("id"), out)
+		if err != nil {
+			return err
+		}
 		return nil
 	})
 }
@@ -98,7 +112,9 @@ func GetPosts() rest.Interactor {
 	}
 
 	return rest.NewHandler(func(c echo.Context, in input, out *[]Post) error {
-		err := setupPaginate(c, in.SetDefaultSort("id"), out)
+		err := setupPaginate(c, in.SetDefaultSort("id"), out, func(db *gorm.DB) *gorm.DB {
+			return db.Joins("User")
+		})
 		if err != nil {
 			return err
 		}

@@ -89,11 +89,11 @@ func sort2OrderByColumns(model any, sort string) []clause.OrderByColumn {
 		if strings.HasPrefix(field, "-") {
 			field, desc = strings.TrimPrefix(field, "-"), true
 		}
-		fieldName, ok := fields[field]
-		if !ok {
-			continue
+		fieldName, ok := fields[strings.ToLower(field)]
+		if ok {
+			field = fieldName
 		}
-		orderByColumns = append(orderByColumns, getOrderByColumn(fieldName, desc))
+		orderByColumns = append(orderByColumns, getOrderByColumn(field, desc))
 	}
 
 	return orderByColumns
@@ -134,7 +134,7 @@ func setFilter(db *gorm.DB, model any, data map[string]string) *gorm.DB {
 		if arr := strings.SplitN(k, ":", 2); len(arr) > 1 {
 			field, op = arr[0], arr[1]
 		}
-		if fieldName, ok := fields[field]; ok && len(v) > 0 {
+		if fieldName, ok := fields[strings.ToLower(field)]; ok && len(v) > 0 {
 			db = where(db, fieldName, strings.TrimSpace(v), op)
 		}
 	}
@@ -216,6 +216,7 @@ func getFields(model any, tag string) map[string]string {
 			continue
 		}
 		fieldName := field.Tag.Get(tag)
+		fieldName = strings.ToLower(fieldName)
 		if len(fieldName) > 0 {
 			dbName := field.Name
 			tagSetting := schema.ParseTagSetting(field.Tag.Get("gorm"), ";")

@@ -159,12 +159,12 @@ func Test_sort2OrderByColumns(t *testing.T) {
 			name: "desc sort",
 			args: args{
 				model: struct {
-					ID uint `json:"id,omitempty" sort:"id"`
+					ID uint `json:"id,omitempty"`
 				}{},
 				sort: "-id",
 			},
 			want: []clause.OrderByColumn{
-				getOrderByColumn("ID", true),
+				getOrderByColumn("id", true),
 			},
 		},
 		{
@@ -183,13 +183,13 @@ func Test_sort2OrderByColumns(t *testing.T) {
 			name: "multi sort",
 			args: args{
 				model: struct {
-					ID        uint      `json:"id,omitempty" sort:"id"`
+					ID        uint      `json:"id,omitempty"`
 					CreatedAt time.Time `json:"created_at,omitempty" sort:"created_at"`
 				}{},
 				sort: "id,created_at",
 			},
 			want: []clause.OrderByColumn{
-				getOrderByColumn("ID", false),
+				getOrderByColumn("id", false),
 				getOrderByColumn("CreatedAt", false),
 			},
 		},
