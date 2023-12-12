@@ -5,7 +5,7 @@
 ## Query Params
 
 ```go
-type PaginationDefault struct {
+type DefaultPagination struct {
 	Page   int               `query:"page" minimum:"1" default:"1"`
 	Size   int               `query:"size" minimum:"1" default:"10"`
 	Sort   string            `query:"sort" description:"1. asc: **id**\n2. desc: **-id**\n3. multi: **id,created_at**"`
