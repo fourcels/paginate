@@ -34,7 +34,7 @@ func Test_getFields(t *testing.T) {
 				tag: "filter",
 			},
 			want: map[string]string{
-				"title": "Title",
+				"title": "title",
 			},
 		},
 
@@ -49,14 +49,14 @@ func Test_getFields(t *testing.T) {
 						User  *struct {
 							ID   uint   `json:"id,omitempty"`
 							Name string `json:"name,omitempty" filter:"name"`
-						} `json:"user,omitempty" filter:"user"`
-					} `json:"post,omitempty" filter:"post"`
+						} `json:"user,omitempty" filter:"User"`
+					} `json:"post,omitempty" filter:"Post"`
 				}{},
 				tag: "filter",
 			},
 			want: map[string]string{
-				"post.title":     "Post.Title",
-				"post.user.name": "Post.User.Name",
+				"Post.title":     "Post.title",
+				"Post.User.name": "Post.User.name",
 			},
 		},
 		{
@@ -152,7 +152,7 @@ func Test_sort2OrderByColumns(t *testing.T) {
 				sort: "id",
 			},
 			want: []clause.OrderByColumn{
-				getOrderByColumn("ID", false),
+				getOrderByColumn("id", false),
 			},
 		},
 		{
@@ -190,7 +190,7 @@ func Test_sort2OrderByColumns(t *testing.T) {
 			},
 			want: []clause.OrderByColumn{
 				getOrderByColumn("id", false),
-				getOrderByColumn("CreatedAt", false),
+				getOrderByColumn("created_at", false),
 			},
 		},
 		{
@@ -199,12 +199,12 @@ func Test_sort2OrderByColumns(t *testing.T) {
 				model: struct {
 					User *struct {
 						ID uint `json:"id,omitempty" sort:"id"`
-					} `json:"user,omitempty" sort:"user"`
+					} `json:"user,omitempty" sort:"User"`
 				}{},
-				sort: "user.id",
+				sort: "User.id",
 			},
 			want: []clause.OrderByColumn{
-				getOrderByColumn("User.ID", false),
+				getOrderByColumn("User.id", false),
 			},
 		},
 	}
@@ -236,8 +236,8 @@ func Test_getSearchColumns(t *testing.T) {
 				}{},
 			},
 			want: []clause.Column{
-				getColumn("Title"),
-				getColumn("Content"),
+				getColumn("title"),
+				getColumn("content"),
 			},
 		},
 		{
@@ -249,7 +249,7 @@ func Test_getSearchColumns(t *testing.T) {
 				}{},
 			},
 			want: []clause.Column{
-				getColumn("Title"),
+				getColumn("title"),
 				getColumn("content2"),
 			},
 		},
@@ -260,12 +260,12 @@ func Test_getSearchColumns(t *testing.T) {
 					Title string `json:"title,omitempty" search:"title"`
 					User  struct {
 						Content string `json:"content,omitempty" search:"content"`
-					} `search:"user"`
+					} `search:"User"`
 				}{},
 			},
 			want: []clause.Column{
-				getColumn("Title"),
-				getColumn("User.Content"),
+				getColumn("title"),
+				getColumn("User.content"),
 			},
 		},
 	}

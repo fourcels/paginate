@@ -23,7 +23,7 @@ type Post struct {
 	Content   string    `json:"content,omitempty" search:"content"`
 	CreatedAt time.Time `json:"created_at,omitempty" filter:"created_at"`
 	UserID    uint      `json:"user_id,omitempty"`
-	User      *User     `json:"user,omitempty" filter:"user"`
+	User      *User     `json:"user,omitempty" filter:"User"`
 }
 
 var DB *gorm.DB
