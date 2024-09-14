@@ -56,12 +56,11 @@ func Paginate[T any](db *gorm.DB, p Pagination, out *[]T, query ...func(db *gorm
 		setFilter(db, model, p.GetFilter())
 		return db
 	})
-	tx := db.Model(model).Scopes(scopes...).Session(&gorm.Session{})
 	var count int64
-	if result := tx.Count(&count); result.Error != nil {
+	if result := db.Session(&gorm.Session{}).Model(model).Scopes(scopes...).Count(&count); result.Error != nil {
 		return count, result.Error
 	}
-	if result := tx.Scopes(OrderByScope(model, p.GetSort())).
+	if result := db.Model(model).Scopes(scopes...).Scopes(OrderByScope(model, p.GetSort())).
 		Offset((p.GetPage() - 1) * p.GetSize()).Limit(p.GetSize()).
 		Find(out); result.Error != nil {
 		return count, result.Error
